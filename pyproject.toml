@@ -8,4 +8,5 @@ dependencies = [
     "anthropic>=0.109.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
+    "sentence-transformers>=5.5.1",
 ]

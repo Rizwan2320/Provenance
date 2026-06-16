@@ -35,3 +35,78 @@ production.
 
 [YOUR: Add one specific thing you discovered when implementing this
 that you wouldn't have predicted from reading about it]"
+
+## Configuration & Secrets Management in Production AI Systems
+
+Question:
+"How do you manage configuration and secrets across local development,
+CI, and production in an AI system that calls multiple external
+providers?"
+
+Why they're asking:
+Misconfigured secrets are a top-5 production incident cause.
+They want to see if you've thought about the full lifecycle —
+not just "I use .env files."
+
+Weak answer:
+"I use a .env file for API keys and load them with python-dotenv.
+In production I set environment variables on the server."
+
+Strong answer:
+"I use pydantic-settings with a typed Settings class as the single
+source of truth. Required fields use Field(...) with no default —
+missing keys crash at startup with a clear ValidationError, not
+silently mid-pipeline when an LLM call hits a 401.
+
+Local dev reads from .env. CI injects secrets as environment
+variables from GitHub Actions secrets — the Settings class adapts
+automatically because pydantic-settings reads env vars before
+the .env file. Production uses [YOUR: secrets manager choice —
+Vault, Doppler, AWS Secrets Manager].
+
+I pin every model version explicitly in Settings —
+never 'claude-sonnet-4' but 'claude-sonnet-4-20250514'. Provider
+model behaviour changes between versions. Pinning means a model
+update is a deliberate config change with a commit, not a
+surprise behaviour shift.
+
+The lru_cache singleton means tests can call
+get_settings.cache_clear() and inject test values without
+reloading modules. [YOUR: add one thing that broke in practice
+and how this design caught it]"
+
+## Provider Abstraction in AI Systems
+
+Question:
+"How do you structure LLM provider access in a production system
+to avoid vendor lock-in, and where do you draw the abstraction
+boundary?"
+
+Why they're asking:
+Every production AI system eventually switches models or providers —
+cost, quality, availability. They want to see if you've thought
+about the blast radius of that change before it happens.
+
+Weak answer:
+"I'd create an abstract base class with methods like generate()
+and embed(), then implement it for each provider. That way I can
+swap providers by changing the implementation."
+
+Strong answer:
+"I draw the abstraction boundary based on current need, not
+anticipated need. With one provider, a thin wrapper function
+cached with lru_cache gives you the same swap-ability as a full
+abstract class — provider change means one config update, nothing
+else. I added the abstract interface only when a second provider
+arrived and I needed runtime selection between them.
+
+The non-obvious decision was separating the client from the
+model name. The client handles authentication and routing —
+in our case pointing to AgentRouter instead of Anthropic directly
+via base_url override. The model name lives in config. Changing
+the model is a config change. Changing the provider is a
+client change. They fail and evolve independently so they
+live separately.
+
+[YOUR: add what actually broke when you first called the
+AgentRouter endpoint and how you debugged it]"

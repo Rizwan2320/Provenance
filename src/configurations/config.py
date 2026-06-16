@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Embedding provider  
     # ------------------------------------------------------------------
     embedding_model_name: str = Field(default="all-MiniLM-L6-v2")
+    embedding_dimension: int = Field(default=384)
 
     # ------------------------------------------------------------------
     # Application
