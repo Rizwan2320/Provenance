@@ -183,3 +183,63 @@ this record is what you debug against.
 Watch for: PyMuPDF imports as `fitz` not `pymupdf`. This trips
 up everyone the first time. `import fitz` is correct
 despite installing `pymupdf`.
+
+## Phase 1 — detector.py (correction: density signals)
+
+Q: Why can't DocumentQuality hold "digital text AND table-heavy"
+as one enum value, and why is splitting it the right fix
+instead of adding a fifth enum value like DIGITAL_TABLE_HEAVY?
+
+A: Enum explosion. Five base states × two density flags = up to
+20 combinations if you tried to enumerate every case. Two
+independent booleans express the same information with two
+fields instead of twenty enum values. The real signal: if two
+properties of a thing can vary independently, they don't
+belong in the same enum — model them as separate fields.
+
+Watch for: find_tables() runs per sampled page, not the whole
+document — keep it that way. Running it on every page
+of a 500-page 10-K at detection time defeats the
+purpose of sampling.
+
+## Phase 1 — detector.py (second correction: geometry can't see content)
+
+Q: Why can't image_area_ratio + text_ratio distinguish a scanned
+text page from a digitally-rasterized chart page?
+
+A: Both produce identical geometry: one image object, near-full
+page coverage, near-zero extractable text. The distinguishing
+fact — is the image's _content_ text-shaped or chart-shaped —
+isn't visible in page layout at all. It only becomes observable
+after OCR runs and you inspect confidence/character density.
+A heuristic that looks plausible on a whiteboard can still be
+structurally incapable of answering the question — that's a
+different failure mode than a bug, and harder to catch because
+the code runs without error and produces a confident-looking answer.
+
+Watch for: any classification heuristic built on layout/geometry
+when the real distinguishing signal is content. Ask:
+"does this input space actually contain the information
+I'm trying to extract?" before trusting the threshold.
+
+## Phase 1 — detector.py (third correction: density signals are conditional, not universal)
+
+Q: Why does is_image_heavy need to be gated on text_ratio instead of
+being computed independently like table_density?
+
+A: image_area_ratio measures "what fraction of the page is covered
+by image objects" — it has no concept of _why_ the page is an
+image. For a SCANNED page, the entire page being one image object
+is the definition of the classification, not new information.
+Flagging it image_heavy on top of SCANNED is a tautology — it
+tells you nothing you didn't already know. The flag only adds
+real signal on a page that DOES have extractable text and ALSO
+has a large embedded image alongside it — that's the WHO-report
+case (charts next to real text), which is the actual use case
+this flag was built for.
+
+Watch for: any derived signal computed from the same underlying
+measurement (page geometry, in this case) as another
+signal can end up redundant or contradictory with it.
+Ask "does this flag add information the primary
+classification doesn't already imply?" before trusting it.

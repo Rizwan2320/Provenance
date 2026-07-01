@@ -147,3 +147,149 @@ the golden dataset in the evaluation phase.
 
 [YOUR: add your actual text_ratio distribution across your test
 corpus and what threshold you settled on after measuring]"
+
+## Schema Design — Orthogonal vs Conflated State
+
+Question:
+"Tell me about a time you found a design flaw in a data model
+before it caused a production bug. How did you spot it?"
+
+Why they're asking:
+This is a system-design-judgment question disguised as a
+behavioral one. They want evidence you read your own schemas
+critically instead of just shipping them.
+
+Strong answer:
+"I'd modeled document quality as a single enum — DIGITAL_TEXT,
+SCANNED, MIXED, IMAGE_HEAVY, TABLE_HEAVY. Before writing the
+detector logic, I realized two of those values weren't mutually
+exclusive with the others — a financial filing can have a perfect
+text layer and be table-heavy at the same time. A single enum
+forces you to pick one truth and silently lose the other.
+
+I split it: DocumentQuality keeps only the mutually-exclusive
+text-layer states. Table and image density became independent
+boolean signals computed separately. The test was simple — for
+any two properties, can they vary independently? If yes, they
+don't belong in the same enum.
+
+[YOUR: add what you found when you ran this against the 5-document
+corpus — which one actually triggered both flags at once]"
+
+## Feature Engineering — When a Heuristic Can't See What It Needs
+
+Question:
+"Tell me about a classification heuristic you built that seemed
+reasonable but turned out to be fundamentally unable to solve the
+problem. How did you catch it?"
+
+Why they're asking:
+Distinguishing "this code has a bug" from "this approach can't work
+no matter how you tune it" is a senior-level diagnostic skill.
+They want evidence you check whether your features can even contain
+the signal you're asking them to discriminate.
+
+Strong answer:
+"I wanted to distinguish scanned text pages from digitally-rasterized
+image pages at document-detection time, using image area coverage
+and text ratio as signals. I caught the problem before shipping it:
+both cases produce identical page geometry — one image, full-page
+coverage, zero extractable text. The signal I needed — is the image
+content text-shaped or chart-shaped — doesn't exist in layout data
+at all, only in pixel content, which you only get after running OCR.
+
+Rather than build a fragile geometric proxy, I deferred the decision
+to extraction time, gated on OCR confidence — a real measured signal
+instead of a guessed one. [YOUR: add the actual OCR confidence
+distribution you saw once Phase 1 OCR ran, and whether you ended
+up needing the vision-captioning fallback at all]"## Feature Engineering — When a Heuristic Can't See What It Needs
+
+Question:
+"Tell me about a classification heuristic you built that seemed
+reasonable but turned out to be fundamentally unable to solve the
+problem. How did you catch it?"
+
+Why they're asking:
+Distinguishing "this code has a bug" from "this approach can't work
+no matter how you tune it" is a senior-level diagnostic skill.
+They want evidence you check whether your features can even contain
+the signal you're asking them to discriminate.
+
+Strong answer:
+"I wanted to distinguish scanned text pages from digitally-rasterized
+image pages at document-detection time, using image area coverage
+and text ratio as signals. I caught the problem before shipping it:
+both cases produce identical page geometry — one image, full-page
+coverage, zero extractable text. The signal I needed — is the image
+content text-shaped or chart-shaped — doesn't exist in layout data
+at all, only in pixel content, which you only get after running OCR.
+
+Rather than build a fragile geometric proxy, I deferred the decision
+to extraction time, gated on OCR confidence — a real measured signal
+instead of a guessed one. [YOUR: add the actual OCR confidence
+distribution you saw once Phase 1 OCR ran, and whether you ended
+up needing the vision-captioning fallback at all]"
+
+## Debugging — When Test Data Hides the Bug You're Looking For
+
+Question:
+"Tell me about a time your test data gave you a false sense of
+confidence — where you thought you'd covered a case but actually
+hadn't."
+
+Why they're asking:
+This tests whether you verify assumptions about test data itself,
+not just your code. A lot of production bugs ship because "we tested
+that case" turns out to mean "we tested a document we assumed had
+that property."
+
+Strong answer:
+"I built a document quality detector and picked one test document
+per quality class — including a 'scanned' document from Internet
+Archive to test the no-text-layer path. Every document, including
+that one, classified as having a full text layer. I didn't assume
+my detector was right and move on — I checked the actual extracted
+text and found OCR artifacts, confirming Archive.org bakes an
+invisible OCR text layer into scanned PDF derivatives for
+searchability. The document was visually scanned but not
+text-layer-empty — two different properties I'd conflated when
+picking test data.
+
+That meant my 'scanned' code path had zero real test coverage
+despite appearing covered. I sourced a genuine no-text-layer
+document — a camera photo converted directly to PDF, no OCR step
+— to actually exercise that branch.
+
+[YOUR: add what you found when you ran the real scanned doc through —
+did the SCANNED branch work correctly on first try, or did testing
+it for real surface a new bug?]"
+
+## Signal Redundancy in Multi-Signal Classification Systems
+
+Question:
+"You're computing several independent signals from the same raw
+input. How do you make sure they're actually adding information
+rather than just restating each other?"
+
+Why they're asking:
+Feature engineering interviews probe whether you understand that
+two metrics derived from the same underlying data can be correlated
+to the point of redundancy — even when they look like separate
+boolean flags in your schema.
+
+Strong answer:
+"I had two density flags — table_heavy and image_heavy — computed
+from page geometry. Testing against a real single-page camera scan
+exposed that image_heavy fired as True on a page with zero embedded
+images, just printed text. The cause: the whole scanned page IS one
+image object at ~100% coverage — that's the SCANNED classification's
+entire premise, so flagging image_heavy on top of it is circular,
+not additive information.
+
+The fix was gating image_heavy on text_ratio exceeding the SCANNED
+threshold — the flag only fires when there's a real text layer
+AND a large embedded image alongside it, which is the actual case
+it's meant to catch.
+
+[YOUR: add whether table_heavy showed the same redundancy issue
+when you checked it, or whether that one was genuinely independent]"
