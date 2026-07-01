@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
@@ -45,8 +45,6 @@ class DocumentQuality(str, Enum):
     DIGITAL_TEXT = "digital_text"  # has extractable text layer
     SCANNED      = "scanned"       # image-only, needs OCR
     MIXED        = "mixed"         # some pages text, some scanned
-    IMAGE_HEAVY  = "image_heavy"
-    TABLE_HEAVY  = "table_heavy"
     ENCRYPTED    = "encrypted"     # reject with clear error
     CORRUPT      = "corrupt"       # reject with clear error
 
@@ -68,7 +66,7 @@ class Document(BaseModel):
     doc_type:         DocumentType
     quality:          DocumentQuality
     raw_path:         str           # data/raw/{tenant_id}/{uuid}/{filename}
-    uploaded_at:      datetime      = Field(default_factory=datetime.utcnow)
+    uploaded_at:      datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_active:        bool          = Field(default=True)
 
     model_config = {"frozen": True}
@@ -97,7 +95,7 @@ class ExtractionRun(BaseModel):
     document_version: int
     strategy:         str           # e.g. "layout_aware", "fast_text", "ocr_paddle"
     config_hash:      str           # sha256 — sealed record of exact config used
-    started_at:       datetime      = Field(default_factory=datetime.utcnow)
+    started_at:       datetime      = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at:     Optional[datetime] = None
     chunk_count:      Optional[int]      = None
     cost_usd:         Optional[float]    = Field(default=None, ge=0.0)
@@ -126,12 +124,12 @@ class ExtractionRun(BaseModel):
 
     def complete(self, chunk_count: int, cost_usd: float) -> None:
         """Call this when extraction finishes successfully."""
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.chunk_count  = chunk_count
         self.cost_usd     = cost_usd
         self.success      = True
 
     def fail(self) -> None:
         """Call this when extraction fails."""
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.success      = False

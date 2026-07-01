@@ -133,3 +133,53 @@ path can exceed the 260-character MAX_PATH limit if
 your username is long. If you hit an OSError on first
 embed call, set TRANSFORMERS_CACHE=C:\hf_cache in
 your .env and add that path to .gitignore.
+
+## Phase 1 — ingestion/detector.py
+
+Q: Why sample pages instead of reading the entire document
+to detect quality? What's the engineering trade-off?
+
+A: Reading all pages to detect quality means paying full extraction
+cost before you know if extraction is even the right strategy.
+On a 500-page scanned document, that's minutes of wasted work
+before you discover OCR is needed. Sampling 5-10 pages gives
+you a statistically reliable signal at ~2% of the cost.
+The trade-off: a document that's DIGITAL_TEXT for 95% of pages
+and SCANNED for 5% gets misclassified as DIGITAL_TEXT. That's
+the MIXED case — we detect it by checking if text_ratio sits
+between two thresholds, not at the extremes. Sampling still
+catches this if your sample is large enough. Start with 5 pages,
+measure misclassification rate on your golden dataset later,
+adjust sample size if it's a real problem. Don't guess upfront.
+
+Q: PyMuPDF opens encrypted PDFs without raising an error —
+it just returns empty pages. Why is this a trap and how
+do you detect it correctly?
+
+A: This is the silent failure the curriculum warns about.
+page.get_text() on an encrypted, locked PDF returns ""
+— identical to a scanned page. If you only check for text
+presence, an encrypted document looks like a scanned one
+and gets queued for OCR, which also returns nothing.
+The correct check is doc.is_encrypted AND doc.authenticate("")
+failing — authenticate("") tries the empty password. If the
+document is encrypted and the empty password doesn't unlock it,
+it's genuinely locked. Detect this first, before any page
+sampling, and reject with a clear error message.
+
+Q: The detector returns a DetectionResult dataclass, not just
+a DocumentQuality enum. Why the extra wrapper?
+
+A: Two reasons. First, the extraction pipeline needs more than
+the label — it needs page_count to estimate cost, text_ratio
+to decide sample size for OCR, and notes for the audit log.
+Returning just the enum loses that context. Second, the
+DetectionResult is the first observability hook in the system.
+Every document that enters the pipeline produces one record
+that says exactly what the detector saw and why it classified
+it the way it did. When a document gets misclassified in Phase 1,
+this record is what you debug against.
+
+Watch for: PyMuPDF imports as `fitz` not `pymupdf`. This trips
+up everyone the first time. `import fitz` is correct
+despite installing `pymupdf`.

@@ -85,4 +85,4 @@ def get_settings() -> Settings:
     Returns the singleton Settings instance.
     In tests: call get_settings.cache_clear() before monkeypatching.
     """
-    return Settings()
+    return Settings()  # type: ignore

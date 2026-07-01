@@ -110,3 +110,40 @@ live separately.
 
 [YOUR: add what actually broke when you first called the
 AgentRouter endpoint and how you debugged it]"
+
+## Routing & Classification in ML Pipelines
+
+Question:
+"How do you handle heterogeneous document types in a RAG ingestion
+pipeline where some documents have text layers and others are scanned
+images? Walk me through the decision points."
+
+Why they're asking:
+Silent failures are the most dangerous failures in ML pipelines.
+They want to know if you've thought about the cases where the
+system appears to work but produces garbage output.
+
+Weak answer:
+"I'd run OCR on all documents to handle both cases, then extract
+text from the OCR output."
+
+Strong answer:
+"Running OCR on everything sounds safe but it's the wrong default.
+OCR on a digital PDF introduces transcription errors that didn't
+exist in the source — you're actively degrading quality on documents
+that have a perfect text layer.
+
+I built a detector that runs before any extraction. It checks
+for corruption and encryption first — both produce silent empty
+output if you don't check for them explicitly. Encrypted PDFs in
+particular look identical to scanned PDFs when you only check for
+text presence. Then it samples pages spread evenly across the
+document — not just the first N pages, because cover pages and
+tables of contents are often image-heavy even in digital documents.
+
+The thresholds — 80% text pages for DIGITAL_TEXT, 20% for SCANNED
+— are starting points, not ground truth. They get tuned against
+the golden dataset in the evaluation phase.
+
+[YOUR: add your actual text_ratio distribution across your test
+corpus and what threshold you settled on after measuring]"
