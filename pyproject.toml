@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.14.1",
     "sentence-transformers>=5.5.1",
     "img2pdf>=0.6.3",
+    "pytesseract>=0.3.13",
 ]
 
 [tool.pyright]

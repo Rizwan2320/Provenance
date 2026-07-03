@@ -6,12 +6,11 @@ src_path = repo_root / "src"
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-from ingestion.detector import detect
-from ingestion.extractor import extract
+
+from ingestion.ocr import extract_scanned
 
 
-result = detect(Path("data/raw/attention_is_all_you_need.pdf"))
-extraction = extract(Path("data/raw/attention_is_all_you_need.pdf"), result.quality)
-print(f"Pages extracted: {len(extraction.pages)}")
-print(f"Total chars: {extraction.total_chars}")
-print(f"Page 1 preview:\n{extraction.pages[4].text[:400]}")
+result = extract_scanned(Path("data/raw/camera_scan_test.pdf"))
+for p in result.pages:
+    print(f"Page {p.page_number} | confidence={p.confidence:.1f}")
+    print(p.text[:300])
