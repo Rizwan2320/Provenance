@@ -5,10 +5,11 @@ Classifies every incoming document before any extraction runs.
 Routing logic lives here. Extraction strategies live in extractor.py.
 
 Detection order (matters — each check assumes previous passed):
-  1. Corrupt  → can't open
-  2. Encrypted → opens but locked
-  3. Digital text / Scanned / Mixed → based on text sampling
-  4. Density signals (table-heavy / image-heavy)
+  1. Structural validation → first pipeline gate
+  2. Corrupt  → can't open
+  3. Encrypted → opens but locked
+  4. Digital text / Scanned / Mixed → based on text sampling
+  5. Density signals (table-heavy / image-heavy)
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
+from ingestion.validator import validate
 
 import fitz  # PyMuPDF  # type: ignore[reportMissingTypeStubs]
 
@@ -62,6 +64,14 @@ def detect(file_path: Path) -> DetectionResult:
     """
     file_path = Path(file_path)
 
+    # --------------------------------------------------------------
+    # Gate 0 — Structural Pipeline Entry Validation
+    # --------------------------------------------------------------
+    result = validate(file_path)
+    if not result.is_valid:
+        raise ValueError(f"Rejected: {result.reason}")
+
+    # Proceeding with quality checks if validation passes
     if not file_path.exists():
         return _make_corrupt_result(f"File not found: {file_path}")
 
