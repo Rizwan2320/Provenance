@@ -12,6 +12,7 @@ from pathlib import Path
 
 import fitz
 
+from configurations.config import get_settings
 from configurations.schema import DocumentQuality
 
 
@@ -55,8 +56,11 @@ def extract_digital(file_path: Path) -> ExtractionResult:
     )
 
 
-def extract(file_path: Path, quality: DocumentQuality) -> ExtractionResult:
+def extract(file_path: Path, doc_id: str, quality: DocumentQuality) -> ExtractionResult:
     """Main dispatcher — always returns ExtractionResult."""
+    # Save page images for all document types
+    save_page_images(file_path, doc_id)
+
     if quality in (DocumentQuality.DIGITAL_TEXT, DocumentQuality.MIXED):
         return extract_digital(file_path)
 
@@ -70,7 +74,7 @@ def extract(file_path: Path, quality: DocumentQuality) -> ExtractionResult:
             PageExtraction(
                 page_number=p.page_number,
                 text=p.text,
-                char_count=len(p.text),   # or p.char_count if available
+                char_count=len(p.text),  # or p.char_count if available
             )
             for p in ocr_result.pages
         ]
@@ -84,3 +88,22 @@ def extract(file_path: Path, quality: DocumentQuality) -> ExtractionResult:
         f"extractor.py received unexpected quality: {quality}. "
         "Check the document quality detector upstream."
     )
+
+
+def save_page_images(file_path: Path, doc_id: str) -> list[str]:
+    """One image per page. Returns list of saved paths."""
+    settings = get_settings()
+    out_dir = settings.page_images_dir / doc_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    doc = fitz.open(str(file_path))
+    paths: list[str] = []
+
+    for i, page in enumerate(doc):
+        pix = page.get_pixmap(dpi=150)  # 150 is enough for viewing, not OCR
+        out_path = out_dir / f"page_{i+1}.png"
+        pix.save(str(out_path))
+        paths.append(str(out_path))
+
+    doc.close()
+    return paths
