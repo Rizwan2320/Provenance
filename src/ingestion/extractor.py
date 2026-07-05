@@ -1,8 +1,9 @@
 # src/ingestion/extractor.py
 """
-Text extraction for DIGITAL_TEXT / MIXED documents.
+Text extraction for DIGITAL_TEXT / MIXED / SCANNED documents.
 
-SCANNED documents are routed to the OCR module.
+Performs page-by-page routing for MIXED documents to balance 
+digital text extraction and OCR performance.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from pathlib import Path
 import fitz
 
 from configurations.config import get_settings
+from ingestion.detector import TEXT_CHARS_PER_PAGE
+from ingestion.ocr import _ocr_page, extract_scanned
 from configurations.schema import DocumentQuality
 
 
@@ -33,7 +36,7 @@ class ExtractionResult:
 
 def extract_digital(file_path: Path) -> ExtractionResult:
     """
-    Extracts text from DIGITAL_TEXT or MIXED documents using PyMuPDF.
+    Extracts text from DIGITAL_TEXT documents using PyMuPDF.
     """
     doc = fitz.open(str(file_path))
     pages: list[PageExtraction] = []
@@ -56,25 +59,55 @@ def extract_digital(file_path: Path) -> ExtractionResult:
     )
 
 
+def extract_mixed(file_path: Path) -> ExtractionResult:
+    """Per-page: use real text if present, OCR only the pages that lack it."""
+    doc = fitz.open(str(file_path))
+    pages: list[PageExtraction] = []
+
+    for i, page in enumerate(doc):
+        text = page.get_text("text", sort=True).strip()
+        
+        # Fall back to OCR if the native text layer is missing or insufficient
+        if len(text) < TEXT_CHARS_PER_PAGE:
+            text, _ = _ocr_page(page)
+            text = text.strip()
+
+        pages.append(
+            PageExtraction(
+                page_number=i + 1,
+                text=text,
+                char_count=len(text),
+            )
+        )
+
+    doc.close()
+
+    return ExtractionResult(
+        pages=pages,
+        total_chars=sum(p.char_count for p in pages),
+    )
+
+
 def extract(file_path: Path, doc_id: str, quality: DocumentQuality) -> ExtractionResult:
-    """Main dispatcher — always returns ExtractionResult."""
+    """Main dispatcher — routes processing based on document quality metrics."""
     # Save page images for all document types
     save_page_images(file_path, doc_id)
 
-    if quality in (DocumentQuality.DIGITAL_TEXT, DocumentQuality.MIXED):
+    if quality == DocumentQuality.DIGITAL_TEXT:
         return extract_digital(file_path)
 
-    if quality == DocumentQuality.SCANNED:
-        from .ocr import extract_scanned
+    if quality == DocumentQuality.MIXED:
+        return extract_mixed(file_path)
 
+    if quality == DocumentQuality.SCANNED:
         ocr_result = extract_scanned(file_path)
 
-        # Convert OCR-specific result to standard ExtractionResult
-        pages: list[PageExtraction] = [
+        # Convert OCR-specific result to standard ExtractionResult structure
+        pages = [
             PageExtraction(
                 page_number=p.page_number,
-                text=p.text,
-                char_count=len(p.text),  # or p.char_count if available
+                text=p.text.strip(),
+                char_count=len(p.text.strip()),
             )
             for p in ocr_result.pages
         ]
