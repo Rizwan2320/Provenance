@@ -18,12 +18,16 @@ from PIL import Image
 # auto-find it like on Linux/Mac.
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+# Global threshold for quality control
+OCR_REVIEW_THRESHOLD = 70.0  # below this, flag for human review — set from real data: 51.2 (bad) vs 92-94 (good)
+
 
 @dataclass
 class OCRPageResult:
     page_number: int
     text: str
     confidence: float  # 0-100, Tesseract's mean word confidence
+    needs_review: bool = False  # confidence < OCR_REVIEW_THRESHOLD
 
 
 @dataclass
@@ -40,11 +44,10 @@ def _ocr_page(page: fitz.Page, dpi: int = 300) -> tuple[str, float]:
     pix = page.get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
-
     text = pytesseract.image_to_string(img).strip()
 
     data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
-    confidences = [int(c) for c in data["conf"] if int(c) > 0]  # -1 = no detection
+    confidences = [int(c) for c in data["conf"] if int(c) >= 0]  # -1 = no detection
     confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
     return text, confidence
@@ -57,7 +60,14 @@ def extract_scanned(file_path: Path, dpi: int = 300) -> OCRResult:
 
     for i, page in enumerate(doc):
         text, confidence = _ocr_page(page, dpi)
-        pages.append(OCRPageResult(page_number=i + 1, text=text, confidence=confidence))
+        pages.append(
+            OCRPageResult(
+                page_number=i + 1,
+                text=text,
+                confidence=confidence,
+                needs_review=confidence < OCR_REVIEW_THRESHOLD,
+            )
+        )
 
     doc.close()
     return OCRResult(pages=pages)
