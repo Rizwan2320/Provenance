@@ -128,7 +128,10 @@ def detect(file_path: Path) -> DetectionResult:
             # Table density
             try:
                 tables = cast(Any, page).find_tables()
-                table_counts.append(len(getattr(tables, "tables", [])) if tables is not None else 0)
+                table_entries = getattr(tables, "tables", []) if tables is not None else []
+                if not isinstance(table_entries, list):
+                    table_entries = []
+                table_counts.append(len(table_entries))
             except Exception:
                 table_counts.append(0)
 

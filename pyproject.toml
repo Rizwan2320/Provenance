@@ -12,6 +12,9 @@ dependencies = [
     "sentence-transformers>=5.5.1",
     "img2pdf>=0.6.3",
     "pytesseract>=0.3.13",
+    "docling>=2.112.0",
+    "pymupdf-layout>=1.27.2.3",
+    "pymupdf4llm>=1.27.2.3",
 ]
 
 [tool.pyright]

@@ -133,3 +133,19 @@ class ExtractionRun(BaseModel):
         """Call this when extraction fails."""
         self.completed_at = datetime.now(timezone.utc)
         self.success      = False
+
+
+class Table(BaseModel):
+    id:              str            # {doc_id}-v{version}-table{index}
+    document_id:     str
+    document_version: int
+    page_number:     int
+    headers:         list[str]
+    rows:            list[list[Optional[str]]]
+    bbox:            tuple[float, float, float, float]
+    extraction_confidence: float
+    caption:         Optional[str] = None       # not extracted yet — Day 3 gap, logged
+    section_context: Optional[str] = None       # filled by Day 5 hierarchy, not yet built
+    nl_description:  Optional[str] = None       # filled below
+
+    model_config = {"frozen": False}  # nl_description set after creation        
