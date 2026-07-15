@@ -148,4 +148,19 @@ class Table(BaseModel):
     section_context: Optional[str] = None       # filled by Day 5 hierarchy, not yet built
     nl_description:  Optional[str] = None       # filled below
 
-    model_config = {"frozen": False}  # nl_description set after creation        
+    model_config = {"frozen": False} 
+    
+    
+class Figure(BaseModel):
+    id:               str
+    document_id:      str
+    document_version: int
+    page_number:      int
+    bbox:             tuple[float, float, float, float]
+    image_path:       str
+    context_before:   Optional[str] = None   # paragraph preceding, for LLM prompt
+    context_after:    Optional[str] = None
+    description:      Optional[str] = None   # filled by vision LLM, next step
+    needs_review:     bool = False
+
+    model_config = {"frozen": False}     # nl_description set after creation        
