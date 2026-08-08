@@ -35,3 +35,45 @@ no new dependency required.
 
 * Schema is slightly less compact — two booleans instead of one enum
   value. Acceptable trade-off for correctness.
+
+## Section hierarchy: PDF native outline (TOC) vs visual heuristic
+
+Chose TOC-first (fitz.get_toc()), heuristic (font-size/bold detection)
+as fallback only. Cost: heuristic path remains unvalidated — no
+outline-less document in corpus yet. Benefit: ground-truth structure
+when available; avoided the accuracy ceiling even mature tools hit
+(pymupdf4llm benchmarks at 0.412 heading accuracy on pure heuristics).
+Validated 4/4 real corpus documents via TOC path.
+
+## Entity extraction: local spaCy vs LLM-based extraction
+
+Chose spaCy (free, local, no network call) over LLM extraction. Cost:
+no semantic coreference — "Company," "Registrant," "Apple Inc." stay
+as separate entities despite referring to the same thing (logged in
+FAILURES.md as a concrete Phase 4 test case). Benefit: zero per-call
+cost, zero gateway-timeout risk — already hit twice with vision calls
+this phase. Revisit if Phase 4 graph quality is measurably hurt by
+the coreference gap.
+
+## Table extraction tooling: heuristic baseline vs heavier tools
+
+Tested and rejected three alternatives: text-strategy fallback
+(69 false positives, worse than baseline), Docling (crashed on this
+hardware — std::bad_alloc, 20min runtime, GPU-oriented pipeline),
+PyMuPDF-Layout (OCR fallback broke on a trivial embedded image, 0
+tables found). Accepted baseline: PyMuPDF lines-only + structural
+filters, 58% precision / ~19% recall. Cost: real, measured recall
+gap on dense financial tables without ruled lines. Benefit: fast,
+reliable, zero crash risk, zero new heavy dependencies. Revisit only
+with Day 7 eval evidence that table quality hurts answer accuracy.
+
+## LLM provider: AgentRouter gateway vs direct Anthropic API
+
+Using AgentRouter (free credit) instead of direct Anthropic due to
+budget constraints. Cost: document content routes through non-
+Anthropic infrastructure (acceptable for test/portfolio corpus, NOT
+for real sensitive data); gateway latency variance directly caused
+the vision-description timeout investigation (Day 4). Benefit: full
+Claude Opus access at zero cost during learning phase. Revisit when
+direct API budget exists — architecture already supports this as a
+one-line config change (providers.py design intent, Phase 0).
