@@ -15,6 +15,7 @@ dependencies = [
     "docling>=2.112.0",
     "pymupdf-layout>=1.27.2.3",
     "pymupdf4llm>=1.27.2.3",
+    "spacy>=3.8.14",
 ]
 
 [tool.pyright]

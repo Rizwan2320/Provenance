@@ -11,9 +11,14 @@ if str(src_path) not in sys.path:
 
 
 
-from ingestion.hierarchy import extract_hierarchy
+from ingestion.extractor import extract_digital
+from ingestion.entities import extract_entities
 
-headings = extract_hierarchy(Path("data/raw/worldbank_mixed.pdf"), doc_id="worldbank")
-for h in headings[:20]:
-    print(f"level={h.level} page={h.page_number} title={h.text!r}")
+result = extract_digital(Path("data/raw/apple_10k_2025.pdf"))
+full_text = "\n".join(p.text for p in result.pages[:10])  # first 10 pages, keep it fast
+
+entities = extract_entities(full_text, doc_id="apple10k")
+print(f"{len(entities)} canonical entities found\n")
+for e in sorted(entities, key=lambda x: -x.mention_count)[:20]:
+    print(f"type={e.entity_type.value} count={e.mention_count} name={e.canonical_name!r} aliases={e.aliases[:3]}")
 ## uv run python scripts/smoke_test_detector.py

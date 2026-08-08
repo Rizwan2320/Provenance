@@ -163,4 +163,23 @@ class Figure(BaseModel):
     description:      Optional[str] = None   # filled by vision LLM, next step
     needs_review:     bool = False
 
-    model_config = {"frozen": False}     # nl_description set after creation        
+    model_config = {"frozen": False}     # nl_description set after creation
+
+
+class EntityType(str, Enum):
+    ORGANISATION = "organisation"
+    PERSON       = "person"
+    DATE         = "date"
+    MONEY        = "money"
+    LOCATION     = "location"
+
+
+class CanonicalEntity(BaseModel):
+    id:               str
+    document_id:      str
+    canonical_name:   str
+    entity_type:      EntityType
+    mention_count:    int
+    aliases:          list[str] = Field(default_factory=list)  # raw surface forms seen
+
+    model_config = {"frozen": False}            
