@@ -182,4 +182,26 @@ class CanonicalEntity(BaseModel):
     mention_count:    int
     aliases:          list[str] = Field(default_factory=list)  # raw surface forms seen
 
-    model_config = {"frozen": False}            
+    model_config = {"frozen": False}   
+
+class ContentType(str, Enum):
+    TEXT   = "text"
+    TABLE  = "table"
+    FIGURE = "figure"
+
+
+class Chunk(BaseModel):
+    id:               str            # {doc_id}-v{version}-chunk{index}
+    document_id:      str
+    document_version: int
+    chunk_index:      int
+    total_chunks:      int
+    content:          str
+    content_type:     ContentType
+    token_count:      int
+    page_number:      int
+    section_path:     list[str] = Field(default_factory=list)  # from Day 5 hierarchy
+    table_id:         Optional[str] = None    # set when content_type == TABLE
+    figure_id:        Optional[str] = None    # set when content_type == FIGURE
+
+    model_config = {"frozen": True}             
