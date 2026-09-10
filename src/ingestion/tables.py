@@ -1,15 +1,31 @@
 # src/configurations/ingestion/tables.py
 
 from __future__ import annotations
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
-import fitz
 from anthropic.types import TextBlock
+import fitz
 
 from configurations.schema import Table
 from configurations.provider import get_llm_client
 from configurations.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _table_prompt(table: Table) -> str:
+    rows = "\n".join(" | ".join(cell or "" for cell in row) for row in table.rows)
+    context = table.section_context or "None provided"
+    return (
+        "Describe the following table accurately and concisely. Preserve important "
+        "numbers, units, dates, and relationships.\n\n"
+        f"Page: {table.page_number}\n"
+        f"Section context: {context}\n"
+        f"Headers: {' | '.join(table.headers)}\n"
+        f"Rows:\n{rows}"
+    )
 
 
 def _is_prose_like(data: list[list], max_avg_words: int = 8) -> bool:
@@ -87,24 +103,32 @@ def extract_tables(file_path: Path, doc_id: str, version: int = 1) -> list[Table
     doc.close()
     return tables
 
-def generate_table_description(table: Table) -> str:
-    """LLM-generated NL description — enables embedding-based retrieval of table content."""
+_claude_quota_exhausted = False  # module-level, reset per process run
+
+def generate_table_description(table: Table) -> Optional[str]:
+    global _claude_quota_exhausted
     settings = get_settings()
     client = get_llm_client()
 
-    prompt = f"""Describe this table in 2-3 sentences. State what it shows and any notable values.
+    models_to_try = [settings.fallback_model_name] if _claude_quota_exhausted \
+                     else [settings.llm_model_name, settings.fallback_model_name]
 
-Headers: {table.headers}
-Rows: {table.rows[:5]}
-Page: {table.page_number}"""
-
-    response = client.messages.create(
-        model=settings.llm_model_name,
-        max_tokens=150,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    # Extract text from response content
-    for block in response.content:
-        if isinstance(block, TextBlock):
-            return block.text.strip()  # type: ignore[attr-defined]
-    return ""
+    for model in models_to_try:
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=2048,
+                timeout=30.0,
+                messages=[{"role": "user", "content": _table_prompt(table)}]
+            )
+            for block in response.content:
+                if isinstance(block, TextBlock):
+                    return block.text.strip()
+            logger.warning("No text block from %s for %s — stop_reason=%s", model, table.id, response.stop_reason)
+        except Exception as exc:
+            if "402" in str(exc) or "quota" in str(exc).lower():
+                if model == settings.llm_model_name:
+                    _claude_quota_exhausted = True
+                    logger.warning("Claude quota exhausted — skipping it for remaining calls this run")
+            logger.warning("%s failed for %s: %s", model, table.id, exc)
+    return None

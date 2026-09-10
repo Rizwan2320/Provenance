@@ -9,8 +9,7 @@ from pathlib import Path
 
 import fitz
 import base64
-from anthropic.types import TextBlock
-from typing import Optional
+from typing import Optional, Any, cast
 
 from configurations.provider import get_llm_client
 from PIL import Image
@@ -110,7 +109,7 @@ def generate_figure_description(figure: Figure) -> Optional[str]:
     try:
         response = client.messages.create(
             model=settings.llm_model_name,
-            max_tokens=200,
+            max_tokens=1024,
             timeout=90.0,  # vision requests are slower through the gateway — calibrated from real timeout data
             messages=[{
                 "role": "user",
@@ -121,8 +120,11 @@ def generate_figure_description(figure: Figure) -> Optional[str]:
             }]
         )
         for block in response.content:
-            if isinstance(block, TextBlock):
-                return block.text.strip()
+            b = cast(Any, block)
+            if hasattr(b, "text"):
+                return getattr(b, "text").strip()
+            if isinstance(b, dict) and "text" in b:
+                return b["text"].strip()
         return None
     except Exception as exc:
         logger.warning("Figure description failed for %s: %s", figure.id, exc)

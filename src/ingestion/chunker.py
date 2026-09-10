@@ -10,7 +10,7 @@ from bisect import bisect_right
 
 import tiktoken
 
-from configurations.schema import Chunk, ContentType
+from configurations.schema import Chunk, ContentType,Table, Figure
 from ingestion.hierarchy import Heading
 
 CHUNK_SIZE_TOKENS = 400   # curriculum baseline starting point
@@ -103,3 +103,65 @@ def chunk_document(
         object.__setattr__(c, "total_chunks", len(chunks))  # frozen model — set once, post-hoc
 
     return chunks
+ 
+
+
+def chunk_tables(tables: list[Table], doc_id: str, headings: list, version: int = 1) -> list[Chunk]:
+    """
+    One chunk per table, content = nl_description (not raw rows).
+    Rationale: bled-cell tables (Day 3) have corrupted structured data;
+    the LLM description reads through that correctly — validated on
+    page 27's products/services table.
+    """
+    breakpoints = _build_section_lookup(headings)
+    chunks = []
+
+    for i, t in enumerate(tables):
+        if not t.nl_description:
+            continue  # no description = not retrievable, skip rather than chunk empty content
+
+        chunks.append(Chunk(
+            id=f"{doc_id}-v{version}-tablechunk{i}",
+            document_id=doc_id,
+            document_version=version,
+            chunk_index=i,
+            total_chunks=-1,
+            content=t.nl_description,
+            content_type=ContentType.TABLE,
+            token_count=len(_encoding.encode(t.nl_description)),
+            page_number=t.page_number,
+            section_path=_section_path_for_page(t.page_number, breakpoints),
+            table_id=t.id,
+        ))
+
+    for c in chunks:
+        object.__setattr__(c, "total_chunks", len(chunks))
+    return chunks
+
+
+def chunk_figures(figures: list[Figure], doc_id: str, headings: list[Heading], version: int = 1) -> list[Chunk]:
+    """One chunk per figure, content = vision-generated description. Mirrors chunk_tables()."""
+    breakpoints = _build_section_lookup(headings)
+    chunks = []
+
+    for i, f in enumerate(figures):
+        if not f.description:
+            continue  # no description = not retrievable, same rule as tables
+
+        chunks.append(Chunk(
+            id=f"{doc_id}-v{version}-figchunk{i}",
+            document_id=doc_id,
+            document_version=version,
+            chunk_index=i,
+            total_chunks=-1,
+            content=f.description,
+            content_type=ContentType.FIGURE,
+            token_count=len(_encoding.encode(f.description)),
+            page_number=f.page_number,
+            section_path=_section_path_for_page(f.page_number, breakpoints),
+            figure_id=f.id,
+        ))
+
+    for c in chunks:
+        object.__setattr__(c, "total_chunks", len(chunks))
+    return chunks        

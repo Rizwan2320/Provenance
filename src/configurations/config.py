@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     # Get key from: agentrouter.org/console/token
     # ------------------------------------------------------------------
     agentrouter_api_key: str = Field(..., description="Required — get from agentrouter.org")
-    llm_model_name: str = Field(default="claude-opus-4-6")
+    llm_model_name: str = Field(default="claude-opus-4-8")
+    fallback_model_name: str = Field(default="glm-5.3")
     llm_base_url: str = Field(default="https://agentrouter.org/")
+      # verify exact string via console or test call below
 
     # ------------------------------------------------------------------
     # Embedding provider  

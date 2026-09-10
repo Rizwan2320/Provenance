@@ -17,6 +17,7 @@ dependencies = [
     "pymupdf4llm>=1.27.2.3",
     "spacy>=3.8.14",
     "tiktoken>=0.13.0",
+    "openai>=3.8.0",
 ]
 
 [tool.pyright]

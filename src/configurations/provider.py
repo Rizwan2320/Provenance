@@ -19,6 +19,8 @@ from sentence_transformers import SentenceTransformer
 from configurations.config import get_settings
 
 
+
+
 @lru_cache(maxsize=1)
 def get_llm_client() -> anthropic.Anthropic:
     """
@@ -38,6 +40,11 @@ def get_llm_client() -> anthropic.Anthropic:
         # header patterns used by gateway proxies
         auth_token=settings.agentrouter_api_key,
     )
+
+# providers.py — add alongside get_llm_client()
+
+
+
 
 
 @lru_cache(maxsize=1)
