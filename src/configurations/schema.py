@@ -200,6 +200,8 @@ class Chunk(BaseModel):
     content_type:     ContentType
     token_count:      int
     page_number:      int
+    char_start:       int             # NEW — offset into the page's canonical text
+    char_end:         int             # NEW — enables evidence-span ground truth, not chunk-ID-base
     section_path:     list[str] = Field(default_factory=list)  # from Day 5 hierarchy
     table_id:         Optional[str] = None    # set when content_type == TABLE
     figure_id:        Optional[str] = None    # set when content_type == FIGURE

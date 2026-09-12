@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 import fitz
 
@@ -41,8 +42,9 @@ def extract_digital(file_path: Path) -> ExtractionResult:
     doc = fitz.open(str(file_path))
     pages: list[PageExtraction] = []
 
-    for i, page in enumerate(doc):
-        text = page.get_text("text", sort=True).strip()
+    for i in range(doc.page_count):
+        page = doc.load_page(i)
+        text = cast(str, page.get_text("text", sort=True)).strip()
         pages.append(
             PageExtraction(
                 page_number=i + 1,
@@ -64,8 +66,9 @@ def extract_mixed(file_path: Path) -> ExtractionResult:
     doc = fitz.open(str(file_path))
     pages: list[PageExtraction] = []
 
-    for i, page in enumerate(doc):
-        text = page.get_text("text", sort=True).strip()
+    for i in range(doc.page_count):
+        page = doc.load_page(i)
+        text = cast(str, page.get_text("text", sort=True)).strip()
         
         # Fall back to OCR if the native text layer is missing or insufficient
         if len(text) < TEXT_CHARS_PER_PAGE:
@@ -132,7 +135,8 @@ def save_page_images(file_path: Path, doc_id: str) -> list[str]:
     doc = fitz.open(str(file_path))
     paths: list[str] = []
 
-    for i, page in enumerate(doc):
+    for i in range(doc.page_count):
+        page = doc.load_page(i)
         pix = page.get_pixmap(dpi=150)  # 150 is enough for viewing, not OCR
         out_path = out_dir / f"page_{i+1}.png"
         pix.save(str(out_path))
