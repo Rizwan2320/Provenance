@@ -207,3 +207,32 @@ class Chunk(BaseModel):
     figure_id:        Optional[str] = None    # set when content_type == FIGURE
 
     model_config = {"frozen": True}             
+
+
+class QueryType(str, Enum):
+    FACTUAL       = "factual"        # single fact, one location
+    MULTI_SECTION = "multi_section"  # answer spans multiple parts of the doc
+    TABLE         = "table"          # answer lives in a table
+    UNANSWERABLE  = "unanswerable"   # deliberately not in the document
+
+
+class EvidenceSpan(BaseModel):
+    page:       int
+    char_start: int
+    char_end:   int
+
+    model_config = {"frozen": True}
+
+
+class GoldenExample(BaseModel):
+    id:               str
+    question:         str
+    reference_answer: str
+    query_type:       QueryType
+
+    evidence_spans:      list[EvidenceSpan] = Field(default_factory=list)  # replaces the 3 flat fields
+    evidence_table_id:   Optional[str] = None
+    evidence_figure_id:  Optional[str] = None
+
+    notes: Optional[str] = None
+    model_config = {"frozen": True}    
