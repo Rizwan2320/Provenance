@@ -293,3 +293,63 @@ it's meant to catch.
 
 [YOUR: add whether table_heavy showed the same redundancy issue
 when you checked it, or whether that one was genuinely independent]"
+
+## Question: "How do you handle OCR reliability in a document pipeline?"
+
+Weak answer: "I run Tesseract and use the extracted text."
+
+Strong answer: "I capture per-page confidence from image_to_data(),
+not just the text. On my test scan, 92% confidence still contained
+a misread character. Confidence is a triage signal — route low-confidence
+pages for human review or reprocessing, not a correctness guarantee.
+[YOUR: add your actual confidence threshold once you set one against
+real failure data]"
+
+## Q: "How do you validate file uploads in a public-facing pipeline?"
+
+Weak: "I check the file extension is .pdf."
+Strong: "Extension checks are spoofable — I validate magic bytes,
+enforce a size ceiling before any processing, and reject empty
+files, all before the file reaches extraction logic.
+[YOUR: note if you later add virus scanning / sandboxing]"
+
+## Q: "How do you know when to stop tuning a heuristic and accept its
+
+current accuracy?"
+
+Weak: "I keep adding rules until it looks clean."
+
+Strong: "I measured table-detection precision at 67% after two cheap
+filters. A third filter could have closed the remaining gap, but every
+candidate rule was only validated against one document's specific
+text patterns — TOC formatting and prose structure are document-specific,
+not universal. Tuning further risked a heuristic that's actually worse
+on the next real document, while looking better on this one. I logged
+67% as a measured baseline instead, with the decision documented, and
+made the call to fix it via better structural signals (or an LLM
+verification pass) later, rather than more regex-style patching now.
+[YOUR: note if Phase 1 Day 7 eval ever surfaced this as a real problem]"
+
+## Q: "How do you catch detection false positives you didn't anticipate?"
+
+Strong: "Structural heuristics filter based on shape — cell count,
+word density. But an LLM asked to describe content will sometimes
+flag semantic mismatches structural checks can't see — e.g. 'this
+table has no numerical values' or 'appears poorly formatted.' I
+found this as a byproduct of generating table descriptions, not
+by designing for it. [YOUR: note whether you built the keyword-based
+secondary filter, and what it caught]"
+
+## Q: "Describe a time you fixed a timeout by finding the actual root
+
+cause instead of just adding retries."
+
+Strong: "A vision LLM call was timing out even at 90s. Before assuming
+the gateway was broken, I isolated the variable — sent a trivial
+100x100 test image through the same path. It succeeded instantly,
+which told me the endpoint itself worked and the problem was specific
+to my real payload. Checking the actual file revealed a 745x664 image
+at 975KB — PNG's lossless compression handles photographic content
+poorly. Switching to JPEG cut the payload 6x and fixed it immediately.
+[YOUR: note if you ever saw this pattern again elsewhere in the
+pipeline]"

@@ -117,7 +117,7 @@ def generate_table_description(table: Table) -> Optional[str]:
         try:
             response = client.messages.create(
                 model=model,
-                max_tokens=2048,
+                max_tokens=4096,
                 timeout=30.0,
                 messages=[{"role": "user", "content": _table_prompt(table)}]
             )

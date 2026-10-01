@@ -77,3 +77,52 @@ the vision-description timeout investigation (Day 4). Benefit: full
 Claude Opus access at zero cost during learning phase. Revisit when
 direct API budget exists — architecture already supports this as a
 one-line config change (providers.py design intent, Phase 0).
+
+## LLM provider: Claude-only vs Claude-with-GLM-fallback
+
+AgentRouter introduced twice-daily quota batches for Claude/GPT
+(402 error when exhausted). Added GLM as an automatic fallback via
+OpenAI-compatible client — different SDK, different endpoint shape,
+not a simple model-string swap. Cost: GLM's description quality is
+unverified against our accuracy bar (Claude was spot-checked, GLM
+is not yet). Benefit: pipeline keeps running through quota exhaustion
+windows instead of blocking for hours.
+
+## Ground truth anchoring: chunk-ID vs. evidence-span
+
+Tested directly: re-ran chunk_document() with CHUNK_SIZE_TOKENS
+changed from 400→350 (a realistic, ordinary tuning change). chunk 17
+pointed to completely different content between runs — proving
+chunk-ID references silently invalidate on any chunker change, with
+no error to signal it. The same page+char_start/char_end reference
+extracted identical text before and after, because it points into
+the stable source page text, not a chunking artifact.
+
+Decision: evidence-span (page + char_start/char_end) is the correct
+ground-truth anchor for Day 7's golden set, confirmed empirically
+on our own pipeline rather than accepted on v6's stated authority.
+Cost: doesn't yet handle the ~38% of chunks spanning page boundaries
+(logged separately in FAILURES.md) — evidence spans are more robust
+to chunker changes, not yet complete for cross-page content.
+
+## Golden dataset ground truth: multi-span evidence vs. single-span
+
+Extended GoldenExample from three flat fields (page/char_start/char_end)
+to evidence_spans: list[EvidenceSpan] when Q7 (multi-section synthesis)
+proved a single span structurally couldn't represent an answer requiring
+two separate document locations. Cost: broke and required migrating
+5 already-locked examples (Q1,Q2,Q5,Q6,Q9) to the new shape. Benefit:
+schema now correctly generalizes to any number of evidence locations
+instead of hardcoding "exactly one" and hitting the same wall on the
+next multi-section question. Chose list-of-one over "optional second
+span" specifically to avoid a future third special case.
+
+## Golden dataset scope: 9 examples on one document vs. broader corpus
+
+Built golden set against Apple's 10-K only, not all 5 corpus documents.
+Reasoning: concentrating examples on the one document with the deepest
+validation history (known table bleeds, known cross-page chunks, known
+hierarchy) lets each question deliberately test a real, already-found
+edge case. Spreading thin across 5 documents would test generalization
+instead — a different, real, but separate question, deferred until
+the minimal single-document workflow is proven against a working baseline.

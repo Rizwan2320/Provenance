@@ -17,12 +17,13 @@ uv.lock        # commit this — do NOT ignore it
 # Data — raw uploads are sensitive
 data/raw/
 data/page_images/
+data/processed/
 
 # IDE
 .vscode/settings.json
 *.suo
 .idea/
-
+.antigravitycli/
 # OS
 Thumbs.db
 desktop.ini

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     agentrouter_api_key: str = Field(..., description="Required — get from agentrouter.org")
     llm_model_name: str = Field(default="claude-opus-4-8")
-    fallback_model_name: str = Field(default="glm-5.3")
+    fallback_model_name: str = Field(default="deepseek-v4-flash")
     llm_base_url: str = Field(default="https://agentrouter.org/")
       # verify exact string via console or test call below
 
@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     @property
     def evaluation_dir(self) -> Path:
         return self.data_dir / "evaluation"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.data_dir / "processed"
 
     # ------------------------------------------------------------------
     # Environment helpers

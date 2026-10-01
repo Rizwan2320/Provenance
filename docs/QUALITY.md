@@ -44,3 +44,19 @@ No end-to-end retrieval quality measurement yet. All numbers above
 are component-level, measured in isolation. Day 7 golden dataset +
 RAGAS is the first point where "is this good enough" gets a real,
 end-to-end answer rather than a per-stage guess.
+
+## Golden dataset (minimal, Day 7 checkpoint)
+
+9 examples, single document (Apple 10-K), all evidence-verified against
+real extracted text — zero guessed spans, several caught and corrected
+mid-construction (page-index mismatches, curly-quote mismatches, bare-
+number disambiguation). Coverage: FACTUAL (5), TABLE (2), MULTI_SECTION
+(1), UNANSWERABLE (1). Deliberately targets known fragile points:
+Q2/Q7 hit the measured 38% cross-page-chunk boundary; Q4 hits the Day 3
+bled-cell table; Q1/Q5/Q6/Q9 each surfaced a real page-indexing or
+text-matching gotcha during construction, now documented in LEARNINGS.md.
+
+Known limitation: 9 examples cannot support statistically meaningful
+per-category metrics — this set answers "does the pipeline work at
+all," not "how well." Full 100+ example set with splits remains deferred
+per the original engineering-grade-first decision.
