@@ -11,6 +11,7 @@ import fitz
 from configurations.schema import Table
 from configurations.provider import get_llm_client
 from configurations.config import get_settings
+from configurations.provider import generate_text 
 
 logger = logging.getLogger(__name__)
 
@@ -108,23 +109,24 @@ _claude_quota_exhausted = False  # module-level, reset per process run
 def generate_table_description(table: Table) -> Optional[str]:
     global _claude_quota_exhausted
     settings = get_settings()
-    client = get_llm_client()
 
-    models_to_try = [settings.fallback_model_name] if _claude_quota_exhausted \
-                     else [settings.llm_model_name, settings.fallback_model_name]
+    if settings.llm_provider == "openai":
+        # Paid API: no quota fallback, and fallback_model_name belongs to a
+        # different provider — sending it here would just 404.
+        models_to_try = [settings.llm_model_name]
+    elif _claude_quota_exhausted:
+        models_to_try = [settings.fallback_model_name]
+    else:
+        models_to_try = [settings.llm_model_name, settings.fallback_model_name]
 
     for model in models_to_try:
         try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=4096,
-                timeout=30.0,
-                messages=[{"role": "user", "content": _table_prompt(table)}]
+            text, stop_reason = generate_text(
+                _table_prompt(table), model=model, max_tokens=4096, timeout=30.0,
             )
-            for block in response.content:
-                if isinstance(block, TextBlock):
-                    return block.text.strip()
-            logger.warning("No text block from %s for %s — stop_reason=%s", model, table.id, response.stop_reason)
+            if text:
+                return text
+            logger.warning("No text from %s for %s — stop_reason=%s", model, table.id, stop_reason)
         except Exception as exc:
             if "402" in str(exc) or "quota" in str(exc).lower():
                 if model == settings.llm_model_name:

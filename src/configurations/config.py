@@ -11,23 +11,33 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing_extensions import Literal
 
+import anthropic
+import openai
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
 
+    #    # ------------------------------------------------------------------
+    # LLM provider selection
     # ------------------------------------------------------------------
-    # LLM provider — AgentRouter gateway (Claude via custom base URL)
-    # Get key from: agentrouter.org/console/token
-    # ------------------------------------------------------------------
-    agentrouter_api_key: str = Field(..., description="Required — get from agentrouter.org")
-    llm_model_name: str = Field(default="claude-opus-4-8")
-    fallback_model_name: str = Field(default="deepseek-v4-flash")
-    llm_base_url: str = Field(default="https://agentrouter.org/")
-      # verify exact string via console or test call below
+    llm_provider: Literal["anthropic", "openai"] = Field(default="anthropic")
 
+    # Anthropic-SDK route (AgentRouter gateway). These three describe ONE
+    # route — change them together.
+    agentrouter_api_key: str = Field(..., description="Required — get from agentrouter.org/console/token")
+    llm_model_name: str = Field(default="claude-opus-4-8")
+    llm_base_url: str = Field(default="https://agentrouter.org/")
+    fallback_model_name: str = Field(default="deepseek-v4-flash")
+
+    # OpenAI-SDK route (direct from api.openai.com, no gateway).
+    # Active when llm_provider == "openai"; the model id comes from
+    # llm_model_name (set LLM_MODEL_NAME=gpt-6-luna in .env).
+    openai_api_key: str = Field(default="")
+    openai_base_url: str = Field(default="https://api.openai.com/v1")
     # ------------------------------------------------------------------
     # Embedding provider  
     # ------------------------------------------------------------------

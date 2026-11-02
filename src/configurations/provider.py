@@ -1,4 +1,3 @@
-
 """
 LLM and embedding model access — single initialisation point.
 
@@ -14,11 +13,10 @@ from __future__ import annotations
 from functools import lru_cache
 
 import anthropic
+from anthropic.types import TextBlock
 from sentence_transformers import SentenceTransformer
 
 from configurations.config import get_settings
-
-
 
 
 @lru_cache(maxsize=1)
@@ -41,10 +39,37 @@ def get_llm_client() -> anthropic.Anthropic:
         auth_token=settings.agentrouter_api_key,
     )
 
-# providers.py — add alongside get_llm_client()
+
+@lru_cache(maxsize=1)
+def get_openai_client():
+    from openai import OpenAI
+    s = get_settings()
+    if not s.openai_api_key:
+        raise RuntimeError("llm_provider=openai but OPENAI_API_KEY is empty")
+    return OpenAI(api_key=s.openai_api_key, base_url=s.openai_base_url)
 
 
+def generate_text(prompt: str, model: str, max_tokens: int, timeout: float) -> tuple[str | None, str]:
+    """(text or None, stop_reason). None + a length/max_tokens reason means a
+    reasoning model spent its whole budget thinking — never treat it as success."""
+    if get_settings().llm_provider == "openai":
+        r = get_openai_client().chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_completion_tokens=max_tokens,  # unverified for Luna; see preflight
+            timeout=timeout,
+        )
+        choice = r.choices[0]
+        return ((choice.message.content or "").strip() or None), str(choice.finish_reason)
 
+    r = get_llm_client().messages.create(
+        model=model, max_tokens=max_tokens, timeout=timeout,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    for block in r.content:
+        if isinstance(block, TextBlock):
+            return (block.text.strip() or None), r.stop_reason or ""
+    return None, r.stop_reason or ""
 
 
 @lru_cache(maxsize=1)
