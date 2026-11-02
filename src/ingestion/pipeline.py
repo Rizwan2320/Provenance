@@ -10,13 +10,14 @@ force a full recompute, or pass force=True.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
 
 from configurations.config import get_settings
 from configurations.provider import embed_texts
-from configurations.schema import Chunk
+from configurations.schema import Chunk, Table
 
 from ingestion.detector import detect
 from ingestion.extractor import extract
@@ -34,6 +35,33 @@ def _chunks_path(doc_id: str) -> Path:
 
 def _embeddings_path(doc_id: str) -> Path:
     return get_settings().processed_dir / doc_id / "embeddings.json"
+
+
+def descriptions_path(doc_id: str) -> Path:
+    return get_settings().processed_dir / doc_id / "table_descriptions.json"
+
+
+def table_hash(table: Table) -> str:
+    """Key on table CONTENT, not just its index-based id: if extraction ever
+    shifts table indices, a stale id->description mapping would silently
+    attach descriptions to the wrong tables (same lesson as chunk-ID refs).
+    Does NOT cover prompt/model changes — delete table_descriptions.json then."""
+    payload = json.dumps(
+        {"page": table.page_number, "headers": table.headers, "rows": table.rows},
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _load_descriptions(doc_id: str) -> dict[str, dict[str, str]]:
+    p = descriptions_path(doc_id)
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+
+def _save_descriptions(doc_id: str, cache: dict[str, dict[str, str]]) -> None:
+    p = descriptions_path(doc_id)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(cache, indent=2), encoding="utf-8")
 
 
 def _load_cached(doc_id: str) -> tuple[list[Chunk], dict[str, list[float]]] | None:
@@ -92,14 +120,26 @@ def run_pipeline(
     # 3. Section hierarchy — TOC-first, ground truth when present
     headings = extract_hierarchy(file_path, doc_id)
 
-    # 4. Tables — extraction is free, descriptions cost LLM calls
+    # 4. Tables — extraction is free; descriptions cost LLM calls, so they are
+    #    cached per table. Failures are not cached and retry on the next run.
     tables = extract_tables(file_path, doc_id, version=version)
+    desc_cache = _load_descriptions(doc_id)
     for table in tables:
+        key = table_hash(table)
+        hit = desc_cache.get(key)
+        if hit:
+            table.nl_description = hit["description"]
+            continue
+
         table.nl_description = generate_table_description(table)
         if table.nl_description is None:
-            logger.warning("No description for %s — will be skipped at chunking (known gap for table3).", table.id)
+            logger.warning("No description for %s — skipped at chunking, retried next run.", table.id)
+            continue
+        desc_cache[key] = {"description": table.nl_description}
+        _save_descriptions(doc_id, desc_cache)  # per success: a crash loses nothing
 
     # 5. Figures — same pattern, no GLM fallback on this path yet (see FAILURES.md)
+    #    Figures stay uncached. There are 0 figures in this document, so there is nothing to protect yet.
     figures = extract_figures(file_path, doc_id, version=version)
     for figure in figures:
         figure.description = generate_figure_description(figure)
