@@ -19,29 +19,25 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE_TOKENS = 400   # curriculum baseline starting point
 CHUNK_OVERLAP_TOKENS = 50
+MIN_SNAP_FRACTION = 0.5  # guessed, not measured: sentence-snapping may never
+                         # retreat below half the window; else hard-cut instead
 
 _encoding = tiktoken.get_encoding("cl100k_base")  # tokenizer choice — see LEARNINGS.md
 _SENTENCE_END = re.compile(r'[.!?]\s')
 
 
 def _snap_to_sentence_boundary(token_ids: list[int], target_end: int) -> tuple[list[int], str]:
-    """
-    Snap a proposed token cut to the latest sentence-ending punctuation.
-
-    Returns (snapped_token_ids, snapped_text) so we never rely on
-    encode/decode length matching the original token stream.
-    This avoids the common tiktoken off-by-a-few-tokens problem that
-    left residual text after the intended sentence boundary.
-    """
     decoded = _encoding.decode(token_ids[:target_end])
     matches = list(_SENTENCE_END.finditer(decoded))
-
     if not matches:
         return token_ids[:target_end], decoded
 
-    last_match_end = matches[-1].end()
-    snapped_text = decoded[:last_match_end]
+    snapped_text = decoded[: matches[-1].end()]
     snapped_token_ids = _encoding.encode(snapped_text)
+    if len(snapped_token_ids) < MIN_SNAP_FRACTION * target_end:
+        # No sentence end late enough (tables, numeric pages): hard cut.
+        # A mid-row cut loses nothing; the overlap carries it into the next chunk.
+        return token_ids[:target_end], decoded
     return snapped_token_ids, snapped_text
 
 
@@ -103,19 +99,19 @@ def chunk_document(
     chunks = []
     i = 0
     chunk_index = 0
-    step = CHUNK_SIZE_TOKENS - CHUNK_OVERLAP_TOKENS
 
     while i < len(token_stream):
         raw_window = token_stream[i : i + CHUNK_SIZE_TOKENS]
         if not raw_window:
             break
+        is_last = i + CHUNK_SIZE_TOKENS >= len(token_stream)
 
         page_number = raw_window[0][0]
         local_start = raw_window[0][2]
 
         # Sentence-boundary snapping
         token_ids = [t for _, t, _ in raw_window]
-        if i + CHUNK_SIZE_TOKENS < len(token_stream):
+        if not is_last:
             token_ids, content = _snap_to_sentence_boundary(token_ids, len(token_ids))
             # Reconstruct the corresponding window slice (may be shorter)
             window = raw_window[:len(token_ids)]
@@ -151,7 +147,9 @@ def chunk_document(
             section_path=_section_path_for_page(page_number, breakpoints),
         ))
         chunk_index += 1
-        i += max(step, len(token_ids) - CHUNK_OVERLAP_TOKENS)
+        if is_last:
+            break
+        i += max(1, len(token_ids) - CHUNK_OVERLAP_TOKENS)
 
     for c in chunks:
         object.__setattr__(c, "total_chunks", len(chunks))  # frozen model — set once, post-hoc
